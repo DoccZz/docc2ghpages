@@ -1,0 +1,40 @@
+name: 'docc2ghpages'
+description: 'Generates a DocC documentation, creates static HTML pages using docc2html, and deploys it to the gh-pagges branch'
+inputs:
+  scheme:
+    description: 'The name of the scheme that the documentation should be generated for passed to xcodebuild'
+    required: true
+  token:
+    description: 'The personal access token (PAT) used to push to the gh-pages branch.'
+    required: true
+    default: ${{ github.token }}
+  destination:
+    description: 'The destination the schme can be build for passed to xcodebuild.'
+    required: true
+    default: 'platform=macOS'
+runs:
+  using: "composite"
+  steps:
+    - uses: maxim-lobanov/setup-xcode@v1.2.3
+      with:
+        xcode-version: latest
+    - run: xcodebuild -version
+      shell: bash
+    - run: swift --version
+      shell: bash
+    - run: |
+        xcodebuild docbuild -scheme ${{ inputs.scheme }} -destination ${{ inputs.destination }} -derivedDataPath ./.xcodebuild
+        cp -r $(find ./.xcodebuild -type d -name '${{ inputs.scheme }}.doccarchive') ./${{ inputs.scheme }}.doccarchive
+        echo "The DocC archive can be found at ./${{ inputs.scheme }}.doccarchive"
+      shell: bash
+    - run: |
+        git clone https://github.com/DoccZz/docc2html.git
+        cd docc2html
+        git checkout $(git describe --tags `git rev-list --tags --max-count=1`)
+        swift run docc2html ../${{ inputs.scheme }}.doccarchive ../docs
+      shell: bash
+    - uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ inputs.token }}
+        publish_dir: ./docs
+        force_orphan: true
